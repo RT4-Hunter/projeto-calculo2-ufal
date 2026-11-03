@@ -13,7 +13,7 @@ Tint = 80.0    # Temperatura do fluido interno mantida constante em regime de op
 t_inicio = 0.0
 t_fim = 24.0
 
-# Adotamos N = 1000 subintervalos (número par) para satisfazer os pressupostos da Regra de 1/3 de Simpson composta,
+# Adotamos N = 1000 subintervalos para satisfazer os pressupostos da Regra de 1/3 de Simpson composta,
 # minimizando o erro de truncamento da quadratura a uma magnitude O(h^4)
 N = 1000
 t = np.linspace(t_inicio, t_fim, N + 1)
@@ -25,16 +25,15 @@ Tamb = 27.0 + 4.0 * np.cos((np.pi / 12.0) * (t - 14.0))
 q = U * A * (Tint - Tamb)
 
 # Aplicação da quadratura numérica de Simpson sobre a função contínua amostrada no intervalo [0, 24] h;
-# o resultado dimensional obtido desta integração direta no tempo (horas) corresponde a W·h
+# o resultado dimensional obtido desta integração direta no tempo corresponde a W·h
 integral_Wh = simpson(q, x=t)
 
-# Fator de conversão (3600) aplicado aqui para compatibilizar a análise dimensional de W·h para Joules, conforme definido na Microentrega 2
+# Fator de conversão aplicado aqui para compatibilizar a análise dimensional de W·h para Joules, conforme definido na Microentrega 2
 Q_total_J = integral_Wh * 3600.0
 
-# Conversão da energia térmica acumulada para kWh (divisão por 10^3 W·h/kWh) para mensuração de custos operacionais na planta
+# Conversão da energia térmica acumulada para kWh para mensuração de custos operacionais na planta
 Q_total_kWh = integral_Wh / 1000.0
 
-# Formatacao de engenharia no padrao ABNT/SI (pontos como separador de milhar e virgula decimal)
 q_joules_str = f"{Q_total_J:_.2f}".replace('.', ',').replace('_', '.')
 q_kwh_str = f"{Q_total_kWh:_.2f}".replace('.', ',').replace('_', '.')
 q_gj = Q_total_J / 1e9
