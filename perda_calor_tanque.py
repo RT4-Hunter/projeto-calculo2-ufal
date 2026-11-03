@@ -47,3 +47,77 @@ print(f"Notacao Cientifica         : {Q_total_J:.4e} J")
 print(f"Ordem de Grandeza (GJ)     : {q_gj:.2f} GJ")
 print(f"Consumo Equivalente (kWh)  : {q_kwh_str} kWh")
 print("-" * 55)
+
+ =============================================================================
+# INTEGRACAO - REGRA DOS TRAPEZIOS (N = 1000)
+# =============================================================================
+
+# Aplicação da Regra dos Trapézios com 1000 subintervalos
+integral_trap_Wh = trapezoid(q, x=t)
+
+# Conversão para Joules e kWh
+Q_trap_J = integral_trap_Wh * 3600.0
+Q_trap_kWh = integral_trap_Wh / 1000.0
+Q_trap_GJ = Q_trap_J / 1e9
+
+# Formatação dos resultados
+q_trap_j_str = f"{Q_trap_J:_.2f}".replace('.', ',').replace('_', '.')
+q_trap_kwh_str = f"{Q_trap_kWh:_.2f}".replace('.', ',').replace('_', '.')
+
+# Impressão dos resultados
+print("\n" + "-" * 55)
+print("     RESULTADOS DA INTEGRACAO - REGRA DOS TRAPEZIOS")
+print("-" * 55)
+print(f"Subintervalos adotados (N) : {N} passos")
+print(f"Perda Total de Calor (J)   : {q_trap_j_str} J")
+print(f"Notacao Cientifica         : {Q_trap_J:.4e} J")
+print(f"Ordem de Grandeza (GJ)     : {Q_trap_GJ:.2f} GJ")
+print(f"Consumo Equivalente (kWh)  : {q_trap_kwh_str} kWh")
+print("-" * 55)
+
+
+# =============================================================================
+# COMPARACAO DOS METODOS E ANALISE DE REFINAMENTO
+# =============================================================================
+
+# Valor exato calculado analiticamente
+Q_exato_J = U * A * (Tint - 27.0) * (t_fim - t_inicio) * 3600.0
+
+print("\n" + "-" * 65)
+print("          COMPARACAO ENTRE TRAPEZIOS E SIMPSON")
+print("-" * 65)
+
+print(f"Valor analitico de referencia: {Q_exato_J:,.2f} J")
+
+for n in [12, 24, 48, 1000]:
+
+    # Criação da malha
+    t_comp = np.linspace(t_inicio, t_fim, n + 1)
+
+    # Cálculo da taxa de calor
+    Tamb_comp = 27.0 + 4.0 * np.cos(
+        (np.pi / 12.0) * (t_comp - 14.0)
+    )
+
+    q_comp = U * A * (Tint - Tamb_comp)
+
+    # Regra dos Trapézios
+    trap_Wh = trapezoid(q_comp, x=t_comp)
+    trap_J = trap_Wh * 3600.0
+
+    # Regra de Simpson
+    simp_Wh = simpson(q_comp, x=t_comp)
+    simp_J = simp_Wh * 3600.0
+
+    # Cálculo dos erros absolutos
+    erro_trap = abs(Q_exato_J - trap_J)
+    erro_simp = abs(Q_exato_J - simp_J)
+
+    # Resultados
+    print(f"\nSubintervalos: N = {n}")
+    print(f"Trapézios: {trap_J:,.2f} J")
+    print(f"Erro Trapézios: {erro_trap:.6e} J")
+    print(f"Simpson: {simp_J:,.2f} J")
+    print(f"Erro Simpson: {erro_simp:.6e} J")
+
+print("\n" + "-" * 65)
