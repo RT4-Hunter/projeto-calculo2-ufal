@@ -7,32 +7,31 @@ try:
 except ImportError:
     from scipy.integrate import simps as simpson
 
-# ==============================================================================
-# 1. PARÂMETROS TERMOFÍSICOS, GEOMÉTRICOS E CLIMÁTICOS (PROJETO CTEC/UFAL - ODS 7)
-# ==============================================================================
-# Dimensões do tanque industrial cilíndrico vertical conforme API 650 / NBR 7821
-A = 562.97     # Área superficial total de troca térmica (costado + teto) em m²
-Tint = 80.0    # Temperatura do fluido interno mantida constante em regime de operação (°C)
+# =============================================================================
+# 1. PARÂMETROS TERMOFÍSICOS, GEOMÉTRICOS E CLIMÁTICOS (SEÇÃO 2.1 DO RELATÓRIO)
+# =============================================================================
+A = 562.97      # Área de troca (costado + teto) [m²]
+Tint = 80.0     # Temperatura interna do fluido, constante [°C]
 
-# Discretização temporal do ciclo diário de 24 horas (N = 1000 subintervalos para Simpson 1/3)
+# Discretização temporal: ciclo de 24 h com N = 1000 subintervalos (Simpson)
 t_inicio = 0.0
 t_fim = 24.0
 N = 1000
 t = np.linspace(t_inicio, t_fim, N + 1)
 
-# Coeficientes globais de transferência de calor em W/(m²·°C)
-U_base = 12.0       # Cenário Base: Tanque em aço carbono sem isolamento
-U_iso = 0.5         # Cenário 1: Isolamento com 50 mm de Poliuretano Injetado
-U_fria = 12.0       # Cenário 2: Tanque sem isolamento sob evento de frente fria
+# Coeficientes globais de transferência de calor [W/(m²·°C)]
+U_base = 12.0   # Cenário Base: tanque sem isolamento
+U_iso = 0.5     # Cenário 1: poliuretano injetado de 50 mm
+U_fria = 12.0   # Cenário 2: tanque sem isolamento sob frente fria
 
-# Modelagens senoidais das temperaturas ambientes diárias (°C) com pico às 14h00
+# Temperatura ambiente senoidal (Eq. 2), com máximo às 14h00
 Tamb_padrao = 27.0 + 4.0 * np.cos((np.pi / 12.0) * (t - 14.0))
 Tamb_fria = 18.0 + 2.0 * np.cos((np.pi / 12.0) * (t - 14.0))
 
-# ==============================================================================
-# 2. CÁLCULO DAS TAXAS INSTANTÂNEAS E QUADRATURAS NUMÉRICAS (REGRA DE SIMPSON)
-# ==============================================================================
-# Taxas instantâneas q(t) em Watts (J/s) e conversão para kW
+# =============================================================================
+# 2. TAXAS INSTANTÂNEAS E QUADRATURA DE SIMPSON
+# =============================================================================
+# Taxa de perda de calor q(t) em watts (Eq. 1) e em kW
 q_base_W = U_base * A * (Tint - Tamb_padrao)
 q_iso_W = U_iso * A * (Tint - Tamb_padrao)
 q_fria_W = U_fria * A * (Tint - Tamb_fria)
@@ -41,12 +40,20 @@ q_base_kW = q_base_W / 1000.0
 q_iso_kW = q_iso_W / 1000.0
 q_fria_kW = q_fria_W / 1000.0
 
-# Quadratura numérica pelo método de 1/3 de Simpson composta (resultado em W·h)
+# Picos (02h00) e vales (14h00) de q(t), em kW
+pico_base = U_base * A * (Tint - (27.0 - 4.0)) / 1000.0
+vale_base = U_base * A * (Tint - (27.0 + 4.0)) / 1000.0
+pico_fria = U_fria * A * (Tint - (18.0 - 2.0)) / 1000.0
+vale_fria = U_fria * A * (Tint - (18.0 + 2.0)) / 1000.0
+pico_iso = U_iso * A * (Tint - (27.0 - 4.0)) / 1000.0
+vale_iso = U_iso * A * (Tint - (27.0 + 4.0)) / 1000.0
+
+# Regra de 1/3 de Simpson composta (Eq. 3), resultado em W·h
 int_base_Wh = simpson(q_base_W, x=t)
 int_iso_Wh = simpson(q_iso_W, x=t)
 int_fria_Wh = simpson(q_fria_W, x=t)
 
-# Conversões para Joules (J), GigaJoules (GJ) e consumo diário em kWh
+# Conversões: J (Eq. 4), GJ e kWh/dia (Eq. 6)
 Q_base_J = int_base_Wh * 3600.0
 Q_iso_J = int_iso_Wh * 3600.0
 Q_fria_J = int_fria_Wh * 3600.0
@@ -59,14 +66,13 @@ Q_base_kWh = int_base_Wh / 1000.0
 Q_iso_kWh = int_iso_Wh / 1000.0
 Q_fria_kWh = int_fria_Wh / 1000.0
 
-# ==============================================================================
-# 3. ANÁLISE ECONÔMICO-FINANCEIRA (TARIFAÇÃO E CUSTO MENSAL)
-# ==============================================================================
-# Premissas: Tarifa de R$ 0,75/kWh e ciclo operacional de 30 dias/mês
-tarifa = 0.75
+# =============================================================================
+# 3. ANÁLISE ECONÔMICO-FINANCEIRA (EQ. 7)
+# =============================================================================
+tarifa = 0.75   # R$/kWh
 dias_mes = 30
 
-# Arredondamento do custo diário em 2 casas decimais antes de multiplicar por 30
+# Custo diário arredondado em 2 casas decimais antes de multiplicar por 30
 custo_dia_base = round(Q_base_kWh * tarifa, 2)
 custo_mes_base = custo_dia_base * dias_mes
 
@@ -76,178 +82,262 @@ custo_mes_iso = custo_dia_iso * dias_mes
 custo_dia_fria = round(Q_fria_kWh * tarifa, 2)
 custo_mes_fria = custo_dia_fria * dias_mes
 
-# Variações percentuais relativas ao Cenário Base
+# Variações percentuais em relação ao Cenário Base
 var_iso_pct = ((Q_iso_kWh - Q_base_kWh) / Q_base_kWh) * 100.0
 var_fria_pct = ((Q_fria_kWh - Q_base_kWh) / Q_base_kWh) * 100.0
 
-# Função utilitária para formatação no padrão brasileiro (milhar '.' e decimal ',')
+# Economia mensal do Cenário 1 em relação ao Cenário Base
+economia_mes_iso = custo_mes_base - custo_mes_iso
+
+
 def formata_br(valor, decimais=2, prefixo=""):
-    if decimais == 0:
-        texto = f"{valor:_.0f}"
-    else:
-        texto = f"{valor:_.{decimais}f}"
+    # Formato brasileiro: milhar com '.' e decimal com ','
+    texto = f"{valor:_.{decimais}f}"
     return f"{prefixo}{texto.replace('.', ',').replace('_', '.')}"
 
-# ==============================================================================
-# 4. GERAÇÃO DA FIGURA 1: TAXA INSTANTÂNEA DE PERDA DE CALOR (24 HORAS)
-# ==============================================================================
-# Paleta de cores harmônica de engenharia
-COR_BASE = '#1B4F72'       # Azul-marinho profundo (Cenário Base)
-COR_ISO = '#1E8449'        # Verde-esmeralda (Cenário 1 - Eficiência Energética)
-COR_FRIA = '#B03A2E'       # Vermelho-terracota (Cenário 2 - Frente Fria)
 
-plt.rcParams['font.sans-serif'] = 'DejaVu Sans'
-plt.rcParams['axes.edgecolor'] = '#7F8C8D'
-plt.rcParams['axes.linewidth'] = 0.8
+# =============================================================================
+# 4. ESTILO GERAL DOS GRÁFICOS
+# =============================================================================
+# As figuras ficam sem título interno, pois a legenda "Figura n – ..." já
+# aparece no relatório. Troque para True para exibir os títulos nas imagens.
+MOSTRAR_TITULO = False
 
-fig1, ax1 = plt.subplots(figsize=(9.5, 5))
+COR_BASE = '#1B4F72'     # Azul-marinho (Cenário Base)
+COR_ISO = '#1E8449'      # Verde (Cenário 1)
+COR_FRIA = '#B03A2E'     # Vermelho (Cenário 2)
+COR_TEXTO = '#2C3E50'
+COR_GRADE = '#AEB6BF'
+COR_BORDA = '#D5D8DC'
 
-# Plotagem das três curvas térmicas
-ax1.plot(t, q_fria_kW, color=COR_FRIA, lw=2.4, label='Cenário 2 — Frente Fria sem Isolamento (U = 12,0 W/(m²·°C))')
-ax1.fill_between(t, q_fria_kW, color=COR_FRIA, alpha=0.08)
+plt.rcParams.update({
+    'font.family': 'DejaVu Sans',
+    'axes.edgecolor': '#7F8C8D',
+    'axes.linewidth': 0.8,
+    'axes.labelcolor': COR_TEXTO,
+    'xtick.color': COR_TEXTO,
+    'ytick.color': COR_TEXTO,
+    'xtick.major.width': 0.8,
+    'ytick.major.width': 0.8,
+})
 
-ax1.plot(t, q_base_kW, color=COR_BASE, lw=2.4, label='Cenário Base — Sem Isolamento Térmico (U = 12,0 W/(m²·°C))')
-ax1.fill_between(t, q_base_kW, color=COR_BASE, alpha=0.08)
 
-ax1.plot(t, q_iso_kW, color=COR_ISO, lw=2.4, label='Cenário 1 — Poliuretano Injetado 50 mm (U = 0,5 W/(m²·°C))')
-ax1.fill_between(t, q_iso_kW, color=COR_ISO, alpha=0.08)
+def caixa(cor):
+    # Estilo padrão das anotações em caixa
+    return dict(boxstyle='round,pad=0.3', facecolor='white',
+                edgecolor=cor, linewidth=0.9, alpha=0.95)
 
-# Limpeza e configuração dos eixos (estilo limpo de engenharia)
+
+# =============================================================================
+# 5. FIGURA 1: TAXA INSTANTÂNEA DE PERDA DE CALOR EM 24 HORAS
+# =============================================================================
+fig1, ax1 = plt.subplots(figsize=(7.4, 4.3))
+
+ax1.plot(t, q_fria_kW, color=COR_FRIA, lw=2.0,
+         label='Cenário 2 — Frente fria sem isolamento (U = 12,0 W/(m²·°C))')
+ax1.fill_between(t, q_fria_kW, color=COR_FRIA, alpha=0.07)
+
+ax1.plot(t, q_base_kW, color=COR_BASE, lw=2.0,
+         label='Cenário Base — Sem isolamento (U = 12,0 W/(m²·°C))')
+ax1.fill_between(t, q_base_kW, color=COR_BASE, alpha=0.07)
+
+ax1.plot(t, q_iso_kW, color=COR_ISO, lw=2.0,
+         label='Cenário 1 — Poliuretano injetado 50 mm (U = 0,5 W/(m²·°C))')
+ax1.fill_between(t, q_iso_kW, color=COR_ISO, alpha=0.07)
+
+# Marcadores nos pontos de pico (02h00) e vale (14h00)
+ax1.plot([2.0, 14.0], [pico_base, vale_base], 'o', color=COR_BASE, ms=5)
+ax1.plot([2.0, 14.0], [pico_fria, vale_fria], 'o', color=COR_FRIA, ms=5)
+
+# Eixos
 ax1.spines['top'].set_visible(False)
 ax1.spines['right'].set_visible(False)
 ax1.set_xlim(0, 24)
-ax1.set_ylim(0, 480)
-
+ax1.set_ylim(0, 520)
 ax1.set_xticks(np.arange(0, 25, 2))
-ax1.set_xticklabels([f"{h:02d}h" for h in range(0, 25, 2)], fontsize=9.5)
-ax1.set_yticks(np.arange(0, 501, 50))
-ax1.set_yticklabels([f"{y}" for y in range(0, 501, 50)], fontsize=9.5)
+ax1.set_xticklabels([f"{h:02d}h" for h in range(0, 25, 2)], fontsize=8.5)
+ax1.set_yticks(np.arange(0, 501, 100))
+ax1.set_yticklabels([f"{y}" for y in range(0, 501, 100)], fontsize=8.5)
+ax1.set_xlabel('Horário do dia (h)', fontsize=9.5, fontweight='bold',
+               labelpad=6)
+ax1.set_ylabel('Taxa de perda de calor, q(t) [kW]', fontsize=9.5,
+               fontweight='bold', labelpad=6)
+ax1.grid(True, linestyle=':', alpha=0.55, color=COR_GRADE)
+ax1.set_axisbelow(True)
 
-ax1.set_xlabel('Horário do Dia ao Longo do Ciclo Operacional (horas)', fontsize=10.5, fontweight='bold', labelpad=8)
-ax1.set_ylabel('Taxa Instantânea de Perda de Calor, q(t) [kW]', fontsize=10.5, fontweight='bold', labelpad=8)
-ax1.set_title('Dinâmica da Taxa de Perda Térmica Instantânea em 24 Horas\nTanque Industrial API 650 (Tint = 80 °C, A = 562,97 m²)',
-              fontsize=11.5, fontweight='bold', pad=12, color='#2C3E50')
+if MOSTRAR_TITULO:
+    ax1.set_title('Taxa instantânea de perda de calor em 24 horas\n'
+                  'Tint = 80 °C; A = 562,97 m²', fontsize=10.5,
+                  fontweight='bold', color=COR_TEXTO, pad=10)
 
-ax1.grid(True, linestyle=':', alpha=0.4, color='#7F8C8D')
+# Anotações dos cenários sem isolamento
+ax1.annotate(f'Cenário 2: pico de {formata_br(pico_fria)} kW (02h00)',
+             xy=(2.0, pico_fria), xytext=(4.2, 480.0),
+             arrowprops=dict(arrowstyle='->', color=COR_FRIA, lw=1.1,
+                             shrinkB=4),
+             fontsize=8, fontweight='bold', color=COR_FRIA,
+             bbox=caixa(COR_BORDA))
 
-# Anotações discretas para pico (02h00) e vale (14h00) no Cenário Base
-ax1.annotate('Pico térmico (02h00)\nMadrugada: q = 385,07 kW',
-             xy=(2.0, 385.07), xytext=(2.6, 320.0),
-             arrowprops=dict(arrowstyle='->', color=COR_BASE, lw=1.3, shrinkB=4),
-             fontsize=8.5, fontweight='bold', color=COR_BASE,
-             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#D5D8DC', alpha=0.9))
+ax1.annotate(f'Base: pico de {formata_br(pico_base)} kW (02h00)',
+             xy=(2.0, pico_base), xytext=(3.2, 305.0),
+             arrowprops=dict(arrowstyle='->', color=COR_BASE, lw=1.1,
+                             shrinkB=4),
+             fontsize=8, fontweight='bold', color=COR_BASE,
+             bbox=caixa(COR_BORDA))
 
-ax1.annotate('Vale térmico (14h00)\nMáx. radiação: q = 331,03 kW',
-             xy=(14.0, 331.03), xytext=(12.0, 250.0),
-             arrowprops=dict(arrowstyle='->', color=COR_BASE, lw=1.3, shrinkB=4),
-             fontsize=8.5, fontweight='bold', color=COR_BASE,
-             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', edgecolor='#D5D8DC', alpha=0.9))
+ax1.annotate(f'Base: vale de {formata_br(vale_base)} kW (14h00)',
+             xy=(14.0, vale_base), xytext=(9.6, 255.0),
+             arrowprops=dict(arrowstyle='->', color=COR_BASE, lw=1.1,
+                             shrinkB=4),
+             fontsize=8, fontweight='bold', color=COR_BASE,
+             bbox=caixa(COR_BORDA))
 
-# Destaque visual demonstrando a redução de 95,83% no fluxo de calor
-ax1.annotate('', xy=(20.5, 365.0), xytext=(20.5, 25.0),
-             arrowprops=dict(arrowstyle='<->', color=COR_ISO, lw=1.8))
-ax1.text(20.8, 195.0, 'Redução de 95,83%\nno fluxo de calor\n(Meta ODS 7.3)',
-         fontsize=8.5, fontweight='bold', color=COR_ISO, va='center',
-         bbox=dict(boxstyle='round,pad=0.4', facecolor='#EAFAF1', edgecolor=COR_ISO, alpha=0.95))
+# Seta de redução entre o Cenário Base e o Cenário 1 em x = 20,5 h
+x_seta = 20.5
+y_topo = float(np.interp(x_seta, t, q_base_kW))
+y_base = float(np.interp(x_seta, t, q_iso_kW))
+ax1.annotate('', xy=(x_seta, y_topo), xytext=(x_seta, y_base),
+             arrowprops=dict(arrowstyle='<->', color=COR_ISO, lw=1.6))
+ax1.text(x_seta - 0.3, 190.0,
+         f'Redução de {formata_br(abs(var_iso_pct))}%\n'
+         'na taxa de perda\nde calor',
+         fontsize=8, fontweight='bold', color=COR_ISO, va='center',
+         ha='right',
+         bbox=dict(boxstyle='round,pad=0.35', facecolor='#EAFAF1',
+                   edgecolor=COR_ISO, linewidth=0.9, alpha=0.95))
 
-# Posicionamento da legenda em área totalmente livre (inferior esquerda)
-ax1.legend(loc='lower left', bbox_to_anchor=(0.02, 0.08), frameon=True,
-           facecolor='white', edgecolor='#D5D8DC', framealpha=0.95, fontsize=8.8)
+# Faixa de variação do Cenário 1
+ax1.text(0.5, 44.0,
+         f'Cenário 1: {formata_br(vale_iso)} a {formata_br(pico_iso)} kW',
+         fontsize=8, fontweight='bold', color=COR_ISO, va='center')
 
-fig1.tight_layout()
+# Legenda fora da área de plotagem, abaixo do eixo x
+ax1.legend(loc='upper center', bbox_to_anchor=(0.5, -0.17), frameon=True,
+           facecolor='white', edgecolor=COR_BORDA, framealpha=0.95,
+           fontsize=7.8, ncol=1)
+
 nome_fig1 = "figura1_taxa_calor_24h.png"
-fig1.savefig(nome_fig1, dpi=300)
+fig1.savefig(nome_fig1, dpi=300, facecolor='white', bbox_inches='tight',
+             pad_inches=0.12)
 plt.close(fig1)
 
-# ==============================================================================
-# 5. GERAÇÃO DA FIGURA 2: COMPARATIVO ENERGÉTICO E ECONÔMICO (ODS 7)
-# ==============================================================================
-fig2, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(11.5, 5))
+# =============================================================================
+# 6. FIGURA 2: COMPARATIVO ENERGÉTICO E ECONÔMICO (ODS 7)
+# =============================================================================
+fig2, (ax_a, ax_b) = plt.subplots(1, 2, figsize=(7.6, 4.3))
 
-cenarios = ['Cenário Base\n(Sem Isolamento)', 'Cenário 1\n(Poliuretano 50 mm)', 'Cenário 2\n(Frente Fria)']
+cenarios = ['Cenário Base\n(sem isolamento)', 'Cenário 1\n(poliuretano)',
+            'Cenário 2\n(frente fria)']
 cores_barras = [COR_BASE, COR_ISO, COR_FRIA]
-
 consumos_kwh = [Q_base_kWh, Q_iso_kWh, Q_fria_kWh]
 custos_mensais = [custo_mes_base, custo_mes_iso, custo_mes_fria]
 
-# --- PAINEL A: CONSUMO ENERGÉTICO DIÁRIO ---
-barras_a = ax_a.bar(cenarios, consumos_kwh, color=cores_barras, width=0.55, edgecolor='#2C3E50', lw=0.8)
-ax_a.spines['top'].set_visible(False)
-ax_a.spines['right'].set_visible(False)
-ax_a.set_ylim(0, 13000)
-ax_a.set_ylabel('Perda Térmica Diária Acumulada [kWh/dia]', fontsize=10.0, fontweight='bold', labelpad=8)
-ax_a.set_title('(A) Consumo Energético Diário Dissipado', fontsize=11.0, fontweight='bold', pad=12, color='#2C3E50')
-ax_a.grid(True, axis='y', linestyle=':', alpha=0.4, color='#7F8C8D')
-ax_a.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f"{x:_.0f}".replace('_', '.')))
 
-# Rótulos de dados do Painel A com variações percentuais
+def rotulo_variacao(i):
+    # Texto da variação percentual em relação ao Cenário Base
+    if i == 0:
+        return "(referência)"
+    if i == 1:
+        return f"(−{formata_br(abs(var_iso_pct))}%)"
+    return f"(+{formata_br(var_fria_pct)}%)"
+
+
+def estiliza(ax, titulo, ylabel, ymax):
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    ax.set_ylim(0, ymax)
+    ax.set_ylabel(ylabel, fontsize=8.8, fontweight='bold', labelpad=6)
+    ax.set_title(titulo, fontsize=9.5, fontweight='bold', pad=10,
+                 color=COR_TEXTO)
+    ax.grid(True, axis='y', linestyle=':', alpha=0.55, color=COR_GRADE)
+    ax.set_axisbelow(True)
+    ax.tick_params(axis='x', labelsize=7.8)
+    ax.tick_params(axis='y', labelsize=8)
+
+
+# --- Painel A: consumo energético diário ---
+barras_a = ax_a.bar(cenarios, consumos_kwh, color=cores_barras, width=0.58,
+                    edgecolor=COR_TEXTO, lw=0.7)
+estiliza(ax_a, '(A) Energia dissipada por dia',
+         'Energia dissipada [kWh/dia]', 13500)
+ax_a.yaxis.set_major_formatter(
+    FuncFormatter(lambda x, p: formata_br(x, 0)))
 for i, barra in enumerate(barras_a):
-    altura = barra.get_height()
-    valor_fmt = formata_br(altura, decimais=2)
-    if i == 0:
-        rotulo = f"{valor_fmt} kWh\n(Referência)"
-        cor_rotulo = COR_BASE
-    elif i == 1:
-        rotulo = f"{valor_fmt} kWh\n({formata_br(var_iso_pct, 2)}%)"
-        cor_rotulo = COR_ISO
-    else:
-        rotulo = f"{valor_fmt} kWh\n(+{formata_br(var_fria_pct, 2)}%)"
-        cor_rotulo = COR_FRIA
+    ax_a.text(barra.get_x() + barra.get_width() / 2.0,
+              barra.get_height() + 250.0,
+              f"{formata_br(barra.get_height())} kWh\n{rotulo_variacao(i)}",
+              ha='center', va='bottom', fontsize=7.6, fontweight='bold',
+              color=cores_barras[i],
+              bbox=dict(facecolor='white', edgecolor='none', pad=1.2,
+                        alpha=0.85))
 
-    ax_a.text(barra.get_x() + barra.get_width() / 2.0, altura + 350.0,
-              rotulo, ha='center', va='bottom', fontsize=8.8, fontweight='bold', color=cor_rotulo)
-
-# --- PAINEL B: CUSTO OPERACIONAL MENSAL ---
-barras_b = ax_b.bar(cenarios, custos_mensais, color=cores_barras, width=0.55, edgecolor='#2C3E50', lw=0.8)
-ax_b.spines['top'].set_visible(False)
-ax_b.spines['right'].set_visible(False)
-ax_b.set_ylim(0, 290000)
-ax_b.set_ylabel('Custo Operacional Mensal Estimado [R$/mês]', fontsize=10.0, fontweight='bold', labelpad=8)
-ax_b.set_title('(B) Impacto Financeiro Mensal (R$ 0,75/kWh)', fontsize=11.0, fontweight='bold', pad=12, color='#2C3E50')
-ax_b.grid(True, axis='y', linestyle=':', alpha=0.4, color='#7F8C8D')
-ax_b.yaxis.set_major_formatter(FuncFormatter(lambda x, p: f"R$ {x:_.0f}".replace('_', '.')))
-
-# Rótulos de dados do Painel B com variações percentuais
+# --- Painel B: custo operacional mensal ---
+barras_b = ax_b.bar(cenarios, custos_mensais, color=cores_barras,
+                    width=0.58, edgecolor=COR_TEXTO, lw=0.7)
+estiliza(ax_b, '(B) Custo mensal (R$ 0,75/kWh)',
+         'Custo mensal [R$/mês]', 300000)
+ax_b.yaxis.set_major_formatter(
+    FuncFormatter(lambda x, p: formata_br(x, 0, 'R$ ')))
 for i, barra in enumerate(barras_b):
-    altura = barra.get_height()
-    valor_fmt = formata_br(altura, decimais=2, prefixo="R$ ")
-    if i == 0:
-        rotulo = f"{valor_fmt}\n(Referência)"
-        cor_rotulo = COR_BASE
-    elif i == 1:
-        rotulo = f"{valor_fmt}\n({formata_br(var_iso_pct, 2)}%)"
-        cor_rotulo = COR_ISO
-    else:
-        rotulo = f"{valor_fmt}\n(+{formata_br(var_fria_pct, 2)}%)"
-        cor_rotulo = COR_FRIA
+    ax_b.text(barra.get_x() + barra.get_width() / 2.0,
+              barra.get_height() + 5500.0,
+              f"{formata_br(barra.get_height(), 2, 'R$ ')}\n"
+              f"{rotulo_variacao(i)}",
+              ha='center', va='bottom', fontsize=7.6, fontweight='bold',
+              color=cores_barras[i],
+              bbox=dict(facecolor='white', edgecolor='none', pad=1.2,
+                        alpha=0.85))
 
-    ax_b.text(barra.get_x() + barra.get_width() / 2.0, altura + 7500.0,
-              rotulo, ha='center', va='bottom', fontsize=8.8, fontweight='bold', color=cor_rotulo)
+# Destaque da economia mensal do Cenário 1 (Painel B)
+ax_b.text(1, 112000.0,
+          f"Economia mensal:\n{formata_br(economia_mes_iso, 2, 'R$ ')}",
+          ha='center', va='center', fontsize=7.6, fontweight='bold',
+          color=COR_ISO,
+          bbox=dict(boxstyle='round,pad=0.35', facecolor='#EAFAF1',
+                    edgecolor=COR_ISO, linewidth=0.9, alpha=0.95))
 
-fig2.suptitle('Análise Comparativa de Eficiência Energética e Viabilidade Econômica (ODS 7 — Meta 7.3)\nTanque Cilíndrico Vertical CTEC/UFAL (API 650)',
-              fontsize=12.0, fontweight='bold', y=0.98, color='#1A252F')
+if MOSTRAR_TITULO:
+    fig2.suptitle('Comparativo energético e econômico dos cenários '
+                  '(ODS 7 — Meta 7.3)', fontsize=10.5, fontweight='bold',
+                  color=COR_TEXTO, y=0.99)
+    fig2.tight_layout(rect=[0, 0, 1, 0.94])
+else:
+    fig2.tight_layout()
 
-fig2.tight_layout(rect=[0, 0, 1, 0.93])
 nome_fig2 = "figura2_comparativo_economico_ods7.png"
-fig2.savefig(nome_fig2, dpi=300)
+fig2.savefig(nome_fig2, dpi=300, facecolor='white')
 plt.close(fig2)
 
-# ==============================================================================
-# 6. TABELA RESUMO NO TERMINAL (PADRÃO CONSOLIDADO DOS SCRIPTS 01 A 05)
-# ==============================================================================
+# =============================================================================
+# 7. RESUMO NO TERMINAL
+# =============================================================================
 print("-" * 78)
-print("RELATORIO CONSOLIDADO DE ENGENHARIA - PROJETO CTEC/UFAL (ODS 7 - META 7.3)")
+print("RELATORIO CONSOLIDADO - PROJETO CTEC/UFAL (ODS 7 - META 7.3)")
 print("-" * 78)
-print(f"Parametros do Tanque : A = {A:.2f} m2 | Tint = {Tint:.1f} °C | Ciclo = 24h (N = {N} passos)")
-print(f"Premissas Financeiras: Tarifa = R$ {tarifa:.2f}/kWh | {dias_mes} dias/mes")
+print(f"Parametros do Tanque : A = {A:.2f} m2 | Tint = {Tint:.1f} C | "
+      f"Ciclo = 24h (N = {N} passos)")
+print(f"Premissas Financeiras: Tarifa = R$ {tarifa:.2f}/kWh | "
+      f"{dias_mes} dias/mes")
 print("-" * 78)
-print(f"{'Cenario':<25} | {'Perda (GJ)':>10} | {'Consumo (kWh)':>14} | {'Custo Mensal':>15} | {'Variacao':>10}")
+print(f"{'Cenario':<25} | {'Perda (GJ)':>10} | {'Consumo (kWh)':>14} | "
+      f"{'Custo Mensal':>15} | {'Variacao':>10}")
 print("-" * 78)
-print(f"{'Cenario Base (U=12.0)':<25} | {formata_br(Q_base_GJ, 2):>7} GJ | {formata_br(Q_base_kWh, 2):>10} kWh | {formata_br(custo_mes_base, 2, 'R$ '):>15} | {'Ref.':>10}")
-print(f"{'Cenario 1 (Poliuretano)':<25} | {formata_br(Q_iso_GJ, 2):>7} GJ | {formata_br(Q_iso_kWh, 2):>10} kWh | {formata_br(custo_mes_iso, 2, 'R$ '):>15} | {formata_br(var_iso_pct, 2):>9}%")
-print(f"{'Cenario 2 (Frente Fria)':<25} | {formata_br(Q_fria_GJ, 2):>7} GJ | {formata_br(Q_fria_kWh, 2):>10} kWh | {formata_br(custo_mes_fria, 2, 'R$ '):>15} | {f'+{formata_br(var_fria_pct, 2)}%':>10}")
+print(f"{'Cenario Base (U=12.0)':<25} | "
+      f"{formata_br(Q_base_GJ, 2):>7} GJ | "
+      f"{formata_br(Q_base_kWh, 2):>10} kWh | "
+      f"{formata_br(custo_mes_base, 2, 'R$ '):>15} | {'Ref.':>10}")
+print(f"{'Cenario 1 (Poliuretano)':<25} | "
+      f"{formata_br(Q_iso_GJ, 2):>7} GJ | "
+      f"{formata_br(Q_iso_kWh, 2):>10} kWh | "
+      f"{formata_br(custo_mes_iso, 2, 'R$ '):>15} | "
+      f"{formata_br(var_iso_pct, 2):>9}%")
+print(f"{'Cenario 2 (Frente Fria)':<25} | "
+      f"{formata_br(Q_fria_GJ, 2):>7} GJ | "
+      f"{formata_br(Q_fria_kWh, 2):>10} kWh | "
+      f"{formata_br(custo_mes_fria, 2, 'R$ '):>15} | "
+      f"{'+' + formata_br(var_fria_pct, 2) + '%':>10}")
 print("-" * 78)
-print("GRAFICOS GERADOS COM SUCESSO (PADRAO 300 DPI):")
+print("GRAFICOS GERADOS COM SUCESSO (300 DPI):")
 print(f"  [1] {nome_fig1}")
 print(f"  [2] {nome_fig2}")
 print("-" * 78)
